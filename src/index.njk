@@ -1,0 +1,175 @@
+---
+layout: base.njk
+title: Deltek Intake Form
+script: /assets/app.js
+---
+
+{% macro renderField(field) %}
+  <div class="field{% if field.full %} full{% endif %}">
+    <label for="{{ field.name }}">{{ field.label }}{% if field.required %} <span class="required">*</span>{% endif %}</label>
+    {% if field.type == "textarea" %}
+      <textarea id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}></textarea>
+    {% elif field.type == "select" %}
+      <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}>
+        <option value="">Select {{ field.label | lower }}</option>
+        {% for option in field.options %}
+          <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <input
+        id="{{ field.name }}"
+        name="{{ field.name }}"
+        type="{{ field.type }}"
+        {% if field.required %}required{% endif %}
+        {% if field.min %}min="{{ field.min }}"{% endif %}
+        {% if field.step %}step="{{ field.step }}"{% endif %}
+      >
+    {% endif %}
+  </div>
+{% endmacro %}
+
+<div class="app-shell" data-intake-app data-vendor-types="{{ intake.vendorTypes | join(',') }}">
+  <header>
+    <div class="header-inner">
+      <h1>Deltek Intake Form</h1>
+      <div class="header-meta" aria-label="Queue summary">
+        <span class="meta-pill" id="newCount">New: 0</span>
+        <span class="meta-pill" id="progressCount">In Progress: 0</span>
+        <span class="meta-pill" id="completeCount">Complete: 0</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="surface" aria-labelledby="intakeHeading">
+      <div class="section-header">
+        <h2 id="intakeHeading">Intake</h2>
+      </div>
+
+      <form
+        id="intakeForm"
+        name="deltek-intake"
+        method="POST"
+        action="/success/"
+        data-netlify="true"
+        netlify-honeypot="bot-field"
+        novalidate
+      >
+        <input type="hidden" name="form-name" value="deltek-intake">
+        <input type="hidden" id="requestId" name="requestId">
+        <input type="hidden" id="createdAt" name="createdAt">
+        <input type="hidden" name="queueStatus" value="New">
+        <p class="netlify-bot-field">
+          <label>Do not fill this out: <input name="bot-field"></label>
+        </p>
+
+        <fieldset>
+          <legend>Request Type</legend>
+          <div class="type-options">
+            {% for type in intake.types %}
+              <label class="type-option">
+                <input type="radio" name="requestType" value="{{ type.key }}" required data-type-radio>
+                <span class="type-label">
+                  <span class="type-title">{{ type.key }}</span>
+                  <span class="type-key">{{ type.short }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset id="commonFieldset" hidden disabled>
+          <legend>Request Details</legend>
+          <div class="form-grid">
+            {% for field in intake.commonFields %}
+              {{ renderField(field) }}
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        {% for type in intake.types %}
+          <fieldset class="specific-fieldset" data-type-panel="{{ type.key }}" hidden disabled>
+            <legend>{{ type.key }} Required Information</legend>
+            <div class="form-grid">
+              {% for field in intake.specificFields[type.key] %}
+                {{ renderField(field) }}
+              {% endfor %}
+            </div>
+          </fieldset>
+        {% endfor %}
+
+        <fieldset id="vendorFieldset" hidden disabled>
+          <legend>Vendor Lookup</legend>
+          <div class="vendor-panel">
+            <div class="field">
+              <label for="vendorSearch">Vendor search</label>
+              <input id="vendorSearch" name="vendorSearch" type="search" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="vendorId">Vendor <span class="required">*</span></label>
+              <select id="vendorId" name="vendorId" required>
+                <option value="">Select vendor</option>
+                {% for vendor in intake.vendors %}
+                  <option
+                    value="{{ vendor.id }}"
+                    data-name="{{ vendor.name }}"
+                    data-category="{{ vendor.category }}"
+                    data-contact="{{ vendor.contact }}"
+                    data-terms="{{ vendor.terms }}"
+                    data-status="{{ vendor.status }}"
+                  >{{ vendor.name }} ({{ vendor.id }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="vendor-details" id="vendorDetails" aria-live="polite"></div>
+          </div>
+        </fieldset>
+
+        <div class="actions" id="formActions" hidden>
+          <div class="left-actions">
+            <button type="submit" class="btn btn-primary">Submit Intake</button>
+            <button type="button" class="btn btn-secondary" id="resetForm">Reset Form</button>
+          </div>
+          <div class="right-actions">
+            <button type="button" class="btn btn-secondary" id="fillSample">Sample Data</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="surface" aria-labelledby="queueHeading">
+      <div class="section-header">
+        <h2 id="queueHeading">Work Queue</h2>
+        <span class="count-badge" id="queueCount">0</span>
+      </div>
+
+      <div class="queue-tools">
+        <div class="filter-group">
+          <label for="queueStatusFilter">Status</label>
+          <select id="queueStatusFilter">
+            <option value="All">All</option>
+            <option value="New">New</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Complete">Complete</option>
+          </select>
+          <label for="queueTypeFilter">Type</label>
+          <select id="queueTypeFilter">
+            <option value="All">All</option>
+            {% for type in intake.types %}
+              <option value="{{ type.key }}">{{ type.key }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-group">
+          <button type="button" class="btn btn-secondary" id="exportQueue">Export CSV</button>
+          <button type="button" class="btn btn-danger" id="clearComplete">Clear Complete</button>
+        </div>
+      </div>
+
+      <div class="queue-list" id="queueList"></div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
